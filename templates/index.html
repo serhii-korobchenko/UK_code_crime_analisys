@@ -15,7 +15,7 @@
   <body>
     <main>
       <h1>🕵️ Аналіз злочинності за UK Postcode</h1>
-      <p>Вставте postcode та радіус у метрах, щоб побачити інфографіку та події на мапі.</p>
+      <p>Вставте postcode, радіус і (за бажанням) період у місяцях, щоб побачити інфографіку та події на мапі.</p>
 
       <section class="panel">
         <form id="analysis-form">
@@ -25,8 +25,11 @@
           <label>Радіус (м)
             <input id="radius" type="number" min="1" max="1000" value="300" required />
           </label>
-          <label>Місяць (необов'язково)
-            <input id="month" type="month" />
+          <label>Початковий місяць (необов'язково)
+            <input id="start-month" type="month" />
+          </label>
+          <label>Кінцевий місяць (необов'язково)
+            <input id="end-month" type="month" />
           </label>
           <button type="submit">Запустити аналіз</button>
         </form>
