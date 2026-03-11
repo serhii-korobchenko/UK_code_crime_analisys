@@ -54,6 +54,27 @@ def fetch_crimes(lat: float, lon: float, date: str | None = None):
     return response.json()
 
 
+def parse_month(month: str) -> datetime:
+    return datetime.strptime(month, "%Y-%m")
+
+
+def month_range(start_month: str, end_month: str) -> list[str]:
+    start = parse_month(start_month)
+    end = parse_month(end_month)
+    if start > end:
+        raise ValueError("Початковий місяць має бути не пізніше кінцевого.")
+
+    result = []
+    current = start
+    while current <= end:
+        result.append(current.strftime("%Y-%m"))
+        if current.month == 12:
+            current = current.replace(year=current.year + 1, month=1)
+        else:
+            current = current.replace(month=current.month + 1)
+    return result
+
+
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -64,7 +85,8 @@ def analyze():
     body = request.get_json(silent=True) or {}
     postcode = str(body.get("postcode", "")).strip()
     radius = float(body.get("radius", 0))
-    month = str(body.get("month", "")).strip() or None
+    start_month = str(body.get("start_month", "")).strip() or None
+    end_month = str(body.get("end_month", "")).strip() or None
 
     if not postcode:
         return jsonify({"error": "Вкажіть UK postcode."}), 400
@@ -72,6 +94,15 @@ def analyze():
         return jsonify({"error": "Радіус має бути > 0."}), 400
     if radius > 1000:
         return jsonify({"error": "Радіус має бути <= 1000 м (обмеження Police API)."}), 400
+    if (start_month and not end_month) or (end_month and not start_month):
+        return jsonify({"error": "Вкажіть одночасно початковий і кінцевий місяць."}), 400
+
+    requested_months = []
+    if start_month and end_month:
+        try:
+            requested_months = month_range(start_month, end_month)
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
 
     try:
         center = geocode_postcode(postcode)
@@ -84,7 +115,12 @@ def analyze():
     lon = center["longitude"]
 
     try:
-        crimes = fetch_crimes(lat, lon, month)
+        if requested_months:
+            crimes = []
+            for month in requested_months:
+                crimes.extend(fetch_crimes(lat, lon, month))
+        else:
+            crimes = fetch_crimes(lat, lon)
     except Exception:
         return jsonify({"error": "Помилка отримання даних з data.police.uk."}), 502
 
@@ -134,6 +170,7 @@ def analyze():
             "postcode": center["normalized_postcode"],
             "center": {"lat": lat, "lng": lon},
             "radius": radius,
+            "period": {"start_month": start_month, "end_month": end_month},
             "total_crimes": len(filtered),
             "top_categories": [{"name": name, "count": count} for name, count in top_categories],
             "all_categories": dict(category_counts),

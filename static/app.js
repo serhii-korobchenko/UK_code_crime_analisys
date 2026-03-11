@@ -61,11 +61,13 @@ form.addEventListener('submit', async (e) => {
   statusEl.textContent = 'Завантаження...';
 
   try {
-    const month = document.getElementById('month').value;
+    const startMonth = document.getElementById('start-month').value;
+    const endMonth = document.getElementById('end-month').value;
     const payload = {
       postcode: document.getElementById('postcode').value,
       radius: Number(document.getElementById('radius').value),
-      month: month || undefined,
+      start_month: startMonth || undefined,
+      end_month: endMonth || undefined,
     };
 
     const response = await fetch('/api/analyze', {
@@ -84,7 +86,10 @@ form.addEventListener('submit', async (e) => {
 
     renderCharts(data);
     renderMap(data);
-    statusEl.textContent = `Готово. Знайдено ${data.total_crimes} подій.`;
+    const period = data.period?.start_month && data.period?.end_month
+      ? ` за період ${data.period.start_month} — ${data.period.end_month}`
+      : '';
+    statusEl.textContent = `Готово. Знайдено ${data.total_crimes} подій${period}.`;
   } catch (error) {
     statusEl.textContent = error.message;
   }
