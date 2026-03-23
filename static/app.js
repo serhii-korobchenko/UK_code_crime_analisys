@@ -58,14 +58,16 @@ function renderMap(data) {
 
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
-  statusEl.textContent = 'Завантаження...';
+  statusEl.textContent = 'Loading...';
 
   try {
-    const month = document.getElementById('month').value;
+    const startMonth = document.getElementById('start-month').value;
+    const endMonth = document.getElementById('end-month').value;
     const payload = {
       postcode: document.getElementById('postcode').value,
       radius: Number(document.getElementById('radius').value),
-      month: month || undefined,
+      start_month: startMonth || undefined,
+      end_month: endMonth || undefined,
     };
 
     const response = await fetch('/api/analyze', {
@@ -75,7 +77,7 @@ form.addEventListener('submit', async (e) => {
     });
 
     const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Помилка запиту');
+    if (!response.ok) throw new Error(data.error || 'Request failed');
 
     outPostcode.textContent = data.postcode;
     outTotal.textContent = data.total_crimes;
@@ -84,7 +86,10 @@ form.addEventListener('submit', async (e) => {
 
     renderCharts(data);
     renderMap(data);
-    statusEl.textContent = `Готово. Знайдено ${data.total_crimes} подій.`;
+    const period = data.period?.start_month && data.period?.end_month
+      ? ` for ${data.period.start_month} — ${data.period.end_month}`
+      : '';
+    statusEl.textContent = `Done. Found ${data.total_crimes} incidents${period}.`;
   } catch (error) {
     statusEl.textContent = error.message;
   }
