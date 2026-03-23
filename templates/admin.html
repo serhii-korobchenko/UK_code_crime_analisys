@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin Visitor Dashboard</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <main>
+      <h1>🔒 Hidden Admin Panel</h1>
+      <p>Detailed visitor activity for this application.</p>
+
+      <section class="grid">
+        <div class="card"><h3>Total visits</h3><p>{{ total_visits }}</p></div>
+        <div class="card"><h3>Unique IPs</h3><p>{{ unique_ips }}</p></div>
+      </section>
+
+      <section class="panel">
+        <h3>Visits by endpoint</h3>
+        <ul>
+          {% for path, count in path_counts.items() %}
+            <li><strong>{{ path }}</strong>: {{ count }}</li>
+          {% endfor %}
+        </ul>
+      </section>
+
+      <section class="panel">
+        <h3>Recent visits</h3>
+        <div style="overflow-x:auto;">
+          <table style="width:100%; border-collapse:collapse;">
+            <thead>
+              <tr>
+                <th align="left">Timestamp (UTC)</th>
+                <th align="left">IP</th>
+                <th align="left">Method</th>
+                <th align="left">Path</th>
+                <th align="left">Language</th>
+                <th align="left">Referer</th>
+                <th align="left">User-Agent</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for visit in visits %}
+                <tr>
+                  <td>{{ visit.timestamp }}</td>
+                  <td>{{ visit.ip }}</td>
+                  <td>{{ visit.method }}</td>
+                  <td>{{ visit.path }}</td>
+                  <td>{{ visit.accept_language }}</td>
+                  <td>{{ visit.referer }}</td>
+                  <td>{{ visit.user_agent }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

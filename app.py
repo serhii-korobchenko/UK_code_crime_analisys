@@ -1,7 +1,7 @@
 import math
 import os
-from collections import Counter
-from datetime import datetime
+from collections import Counter, deque
+from datetime import datetime, timezone
 
 import requests
 from flask import Flask, jsonify, render_template, request
@@ -10,6 +10,9 @@ app = Flask(__name__)
 
 POSTCODES_API = "https://api.postcodes.io/postcodes/{postcode}"
 POLICE_API = "https://data.police.uk/api/crimes-street/all-crime"
+ADMIN_PANEL_KEY = os.environ.get("ADMIN_PANEL_KEY", "change-me")
+VISITOR_LOG_LIMIT = 1000
+visitor_log = deque(maxlen=VISITOR_LOG_LIMIT)
 
 
 def calculate_bbox(lat: float, lon: float, distance_m: float):
@@ -54,6 +57,31 @@ def fetch_crimes(lat: float, lon: float, date: str | None = None):
     return response.json()
 
 
+def get_client_ip() -> str:
+    forwarded = request.headers.get("X-Forwarded-For", "")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.remote_addr or "unknown"
+
+
+@app.before_request
+def log_visitor():
+    if request.path.startswith("/static/"):
+        return
+
+    visitor_log.append(
+        {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "ip": get_client_ip(),
+            "method": request.method,
+            "path": request.path,
+            "user_agent": request.user_agent.string or "unknown",
+            "accept_language": request.headers.get("Accept-Language", "unknown"),
+            "referer": request.headers.get("Referer", "direct"),
+        }
+    )
+
+
 def parse_month(month: str) -> datetime:
     return datetime.strptime(month, "%Y-%m")
 
@@ -62,7 +90,7 @@ def month_range(start_month: str, end_month: str) -> list[str]:
     start = parse_month(start_month)
     end = parse_month(end_month)
     if start > end:
-        raise ValueError("Початковий місяць має бути не пізніше кінцевого.")
+        raise ValueError("Start month must be earlier than or equal to end month.")
 
     result = []
     current = start
@@ -80,6 +108,25 @@ def index():
     return render_template("index.html")
 
 
+@app.route("/internal/admin")
+def admin_panel():
+    key = request.args.get("key", "")
+    if key != ADMIN_PANEL_KEY:
+        return jsonify({"error": "Not found"}), 404
+
+    visits = list(visitor_log)
+    unique_ips = len({visit["ip"] for visit in visits})
+    path_counts = Counter(visit["path"] for visit in visits)
+
+    return render_template(
+        "admin.html",
+        visits=reversed(visits),
+        total_visits=len(visits),
+        unique_ips=unique_ips,
+        path_counts=path_counts,
+    )
+
+
 @app.post("/api/analyze")
 def analyze():
     body = request.get_json(silent=True) or {}
@@ -89,13 +136,13 @@ def analyze():
     end_month = str(body.get("end_month", "")).strip() or None
 
     if not postcode:
-        return jsonify({"error": "Вкажіть UK postcode."}), 400
+        return jsonify({"error": "Please provide a UK postcode."}), 400
     if radius <= 0:
-        return jsonify({"error": "Радіус має бути > 0."}), 400
+        return jsonify({"error": "Radius must be greater than 0."}), 400
     if radius > 1000:
-        return jsonify({"error": "Радіус має бути <= 1000 м (обмеження Police API)."}), 400
+        return jsonify({"error": "Radius must be <= 1000 meters (Police API limit)."}), 400
     if (start_month and not end_month) or (end_month and not start_month):
-        return jsonify({"error": "Вкажіть одночасно початковий і кінцевий місяць."}), 400
+        return jsonify({"error": "Please provide both start and end month."}), 400
 
     requested_months = []
     if start_month and end_month:
@@ -107,9 +154,9 @@ def analyze():
     try:
         center = geocode_postcode(postcode)
     except requests.HTTPError:
-        return jsonify({"error": "Не вдалося знайти такий postcode."}), 404
+        return jsonify({"error": "Postcode was not found."}), 404
     except Exception:
-        return jsonify({"error": "Помилка геокодування postcode."}), 500
+        return jsonify({"error": "Postcode geocoding failed."}), 500
 
     lat = center["latitude"]
     lon = center["longitude"]
@@ -122,7 +169,7 @@ def analyze():
         else:
             crimes = fetch_crimes(lat, lon)
     except Exception:
-        return jsonify({"error": "Помилка отримання даних з data.police.uk."}), 502
+        return jsonify({"error": "Failed to fetch data from data.police.uk."}), 502
 
     lat_min, lat_max, lon_min, lon_max = calculate_bbox(lat, lon, radius)
 

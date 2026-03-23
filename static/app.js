@@ -58,7 +58,7 @@ function renderMap(data) {
 
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
-  statusEl.textContent = 'Завантаження...';
+  statusEl.textContent = 'Loading...';
 
   try {
     const startMonth = document.getElementById('start-month').value;
@@ -77,7 +77,7 @@ form.addEventListener('submit', async (e) => {
     });
 
     const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Помилка запиту');
+    if (!response.ok) throw new Error(data.error || 'Request failed');
 
     outPostcode.textContent = data.postcode;
     outTotal.textContent = data.total_crimes;
@@ -87,9 +87,9 @@ form.addEventListener('submit', async (e) => {
     renderCharts(data);
     renderMap(data);
     const period = data.period?.start_month && data.period?.end_month
-      ? ` за період ${data.period.start_month} — ${data.period.end_month}`
+      ? ` for ${data.period.start_month} — ${data.period.end_month}`
       : '';
-    statusEl.textContent = `Готово. Знайдено ${data.total_crimes} подій${period}.`;
+    statusEl.textContent = `Done. Found ${data.total_crimes} incidents${period}.`;
   } catch (error) {
     statusEl.textContent = error.message;
   }
