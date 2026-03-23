@@ -1,5 +1,6 @@
 import math
 import os
+import ipaddress
 from collections import Counter, deque
 from datetime import datetime, timezone
 
@@ -13,6 +14,7 @@ POLICE_API = "https://data.police.uk/api/crimes-street/all-crime"
 ADMIN_PANEL_KEY = os.environ.get("ADMIN_PANEL_KEY", "change-me")
 VISITOR_LOG_LIMIT = 1000
 visitor_log = deque(maxlen=VISITOR_LOG_LIMIT)
+ip_location_cache: dict[str, dict] = {}
 
 
 def calculate_bbox(lat: float, lon: float, distance_m: float):
@@ -64,15 +66,54 @@ def get_client_ip() -> str:
     return request.remote_addr or "unknown"
 
 
+def resolve_ip_location(ip: str) -> dict:
+    if not ip or ip == "unknown":
+        return {"country": "Unknown", "lat": None, "lng": None}
+
+    if ip in ip_location_cache:
+        return ip_location_cache[ip]
+
+    try:
+        parsed = ipaddress.ip_address(ip)
+        if parsed.is_private or parsed.is_loopback or parsed.is_link_local:
+            location = {"country": "Local/Private Network", "lat": None, "lng": None}
+            ip_location_cache[ip] = location
+            return location
+    except ValueError:
+        location = {"country": "Unknown", "lat": None, "lng": None}
+        ip_location_cache[ip] = location
+        return location
+
+    try:
+        response = requests.get(f"https://ipapi.co/{ip}/json/", timeout=5)
+        response.raise_for_status()
+        payload = response.json()
+        location = {
+            "country": payload.get("country_name") or "Unknown",
+            "lat": payload.get("latitude"),
+            "lng": payload.get("longitude"),
+        }
+    except Exception:
+        location = {"country": "Unknown", "lat": None, "lng": None}
+
+    ip_location_cache[ip] = location
+    return location
+
+
 @app.before_request
 def log_visitor():
     if request.path.startswith("/static/"):
         return
 
+    ip = get_client_ip()
+    location = resolve_ip_location(ip)
     visitor_log.append(
         {
             "timestamp": datetime.now(timezone.utc).isoformat(),
-            "ip": get_client_ip(),
+            "ip": ip,
+            "country": location["country"],
+            "lat": location["lat"],
+            "lng": location["lng"],
             "method": request.method,
             "path": request.path,
             "user_agent": request.user_agent.string or "unknown",
@@ -117,6 +158,12 @@ def admin_panel():
     visits = list(visitor_log)
     unique_ips = len({visit["ip"] for visit in visits})
     path_counts = Counter(visit["path"] for visit in visits)
+    country_counts = Counter(visit["country"] for visit in visits)
+    map_points = [
+        {"lat": visit["lat"], "lng": visit["lng"], "ip": visit["ip"], "country": visit["country"]}
+        for visit in visits
+        if visit["lat"] is not None and visit["lng"] is not None
+    ]
 
     return render_template(
         "admin.html",
@@ -124,6 +171,8 @@ def admin_panel():
         total_visits=len(visits),
         unique_ips=unique_ips,
         path_counts=path_counts,
+        country_counts=country_counts,
+        map_points=map_points,
     )
 
 
