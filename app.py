@@ -60,6 +60,14 @@ def fetch_crimes(lat: float, lon: float, date: str | None = None):
 
 
 def get_client_ip() -> str:
+    cf_connecting_ip = request.headers.get("CF-Connecting-IP", "").strip()
+    if cf_connecting_ip:
+        return cf_connecting_ip
+
+    x_real_ip = request.headers.get("X-Real-IP", "").strip()
+    if x_real_ip:
+        return x_real_ip
+
     forwarded = request.headers.get("X-Forwarded-For", "")
     if forwarded:
         return forwarded.split(",")[0].strip()
@@ -84,17 +92,37 @@ def resolve_ip_location(ip: str) -> dict:
         ip_location_cache[ip] = location
         return location
 
-    try:
-        response = requests.get(f"https://ipapi.co/{ip}/json/", timeout=5)
-        response.raise_for_status()
-        payload = response.json()
-        location = {
-            "country": payload.get("country_name") or "Unknown",
-            "lat": payload.get("latitude"),
-            "lng": payload.get("longitude"),
-        }
-    except Exception:
-        location = {"country": "Unknown", "lat": None, "lng": None}
+    location = {"country": "Unknown", "lat": None, "lng": None}
+
+    providers = [
+        f"https://ipwho.is/{ip}",
+        f"https://ipapi.co/{ip}/json/",
+    ]
+
+    for provider_url in providers:
+        try:
+            response = requests.get(provider_url, timeout=5)
+            response.raise_for_status()
+            payload = response.json()
+
+            if "ipwho.is" in provider_url:
+                if not payload.get("success", False):
+                    continue
+                location = {
+                    "country": payload.get("country") or "Unknown",
+                    "lat": payload.get("latitude"),
+                    "lng": payload.get("longitude"),
+                }
+                break
+
+            location = {
+                "country": payload.get("country_name") or "Unknown",
+                "lat": payload.get("latitude"),
+                "lng": payload.get("longitude"),
+            }
+            break
+        except Exception:
+            continue
 
     ip_location_cache[ip] = location
     return location
