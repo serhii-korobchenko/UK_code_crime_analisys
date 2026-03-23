@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin Visitor Dashboard</title>
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""
+    />
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <main>
+      <h1>🔒 Hidden Admin Panel</h1>
+      <p>Detailed visitor activity for this application.</p>
+
+      <section class="grid">
+        <div class="card"><h3>Total visits</h3><p>{{ total_visits }}</p></div>
+        <div class="card"><h3>Unique IPs</h3><p>{{ unique_ips }}</p></div>
+      </section>
+
+      <section class="panel">
+        <h3>Visits by endpoint</h3>
+        <ul>
+          {% for path, count in path_counts.items() %}
+            <li><strong>{{ path }}</strong>: {{ count }}</li>
+          {% endfor %}
+        </ul>
+      </section>
+
+      <section class="panel">
+        <h3>Visits by country</h3>
+        <ul>
+          {% for country, count in country_counts.items() %}
+            <li><strong>{{ country }}</strong>: {{ count }}</li>
+          {% endfor %}
+        </ul>
+      </section>
+
+      <section class="panel">
+        <h3>Visitor country map</h3>
+        <div id="admin-map"></div>
+      </section>
+
+      <section class="panel">
+        <h3>Recent visits</h3>
+        <div style="overflow-x:auto;">
+          <table style="width:100%; border-collapse:collapse;">
+            <thead>
+              <tr>
+                <th align="left">Timestamp (UTC)</th>
+                <th align="left">IP</th>
+                <th align="left">Country</th>
+                <th align="left">Method</th>
+                <th align="left">Path</th>
+                <th align="left">Language</th>
+                <th align="left">Referer</th>
+                <th align="left">User-Agent</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for visit in visits %}
+                <tr>
+                  <td>{{ visit.timestamp }}</td>
+                  <td>{{ visit.ip }}</td>
+                  <td>{{ visit.country }}</td>
+                  <td>{{ visit.method }}</td>
+                  <td>{{ visit.path }}</td>
+                  <td>{{ visit.accept_language }}</td>
+                  <td>{{ visit.referer }}</td>
+                  <td>{{ visit.user_agent }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""
+    ></script>
+    <script>
+      const points = {{ map_points | tojson }};
+      const map = L.map('admin-map').setView([20, 0], 2);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(map);
+
+      if (!points.length) {
+        L.popup()
+          .setLatLng([20, 0])
+          .setContent('No geolocated visitor data yet.')
+          .openOn(map);
+      } else {
+        const markers = [];
+        points.forEach((point) => {
+          const marker = L.marker([point.lat, point.lng])
+            .addTo(map)
+            .bindPopup(`<b>${point.country}</b><br>IP: ${point.ip}`);
+          markers.push(marker);
+        });
+
+        const group = L.featureGroup(markers);
+        map.fitBounds(group.getBounds().pad(0.3));
+      }
+    </script>
+  </body>
+</html>
