@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="uk">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -14,29 +14,32 @@
   </head>
   <body>
     <main>
-      <h1>🕵️ Аналіз злочинності за UK Postcode</h1>
-      <p>Вставте postcode та радіус у метрах, щоб побачити інфографіку та події на мапі.</p>
+      <h1>🕵️ UK Postcode Crime Analyzer</h1>
+      <p>Enter a postcode, radius, and optional month range to see charts and incidents on the map.</p>
 
       <section class="panel">
         <form id="analysis-form">
           <label>UK Postcode
-            <input id="postcode" required placeholder="Напр. SW1A 1AA" />
+            <input id="postcode" required placeholder="e.g. SW1A 1AA" />
           </label>
-          <label>Радіус (м)
+          <label>Radius (m)
             <input id="radius" type="number" min="1" max="1000" value="300" required />
           </label>
-          <label>Місяць (необов'язково)
-            <input id="month" type="month" />
+          <label>Start month (optional)
+            <input id="start-month" type="month" />
           </label>
-          <button type="submit">Запустити аналіз</button>
+          <label>End month (optional)
+            <input id="end-month" type="month" />
+          </label>
+          <button type="submit">Run analysis</button>
         </form>
         <p id="status"></p>
       </section>
 
       <section class="grid">
         <div class="card"><h3>📍 Postcode</h3><p id="out-postcode">—</p></div>
-        <div class="card"><h3>🚨 Всього подій</h3><p id="out-total">—</p></div>
-        <div class="card"><h3>🥇 Топ категорія</h3><p id="out-top">—</p></div>
+        <div class="card"><h3>🚨 Total incidents</h3><p id="out-total">—</p></div>
+        <div class="card"><h3>🥇 Top category</h3><p id="out-top">—</p></div>
       </section>
 
       <section class="panel"><canvas id="categoryChart"></canvas></section>
