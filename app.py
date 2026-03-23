@@ -1,6 +1,7 @@
 import math
 import os
 import ipaddress
+import json
 from collections import Counter, deque
 from datetime import datetime, timezone
 
@@ -15,6 +16,7 @@ ADMIN_PANEL_KEY = os.environ.get("ADMIN_PANEL_KEY", "change-me")
 VISITOR_LOG_LIMIT = 1000
 visitor_log = deque(maxlen=VISITOR_LOG_LIMIT)
 ip_location_cache: dict[str, dict] = {}
+REQUEST_CONTENT_LIMIT = 1200
 
 
 def calculate_bbox(lat: float, lon: float, distance_m: float):
@@ -128,6 +130,22 @@ def resolve_ip_location(ip: str) -> dict:
     return location
 
 
+def extract_request_content() -> str:
+    if request.method not in {"POST", "PUT", "PATCH"}:
+        return "-"
+
+    payload = request.get_json(silent=True)
+    if payload is not None:
+        content = json.dumps(payload, ensure_ascii=False)
+    else:
+        raw_data = request.get_data(cache=True, as_text=True) or ""
+        content = raw_data if raw_data else "-"
+
+    if len(content) > REQUEST_CONTENT_LIMIT:
+        return f"{content[:REQUEST_CONTENT_LIMIT]}... [truncated]"
+    return content
+
+
 @app.before_request
 def log_visitor():
     if request.path.startswith("/static/"):
@@ -144,6 +162,7 @@ def log_visitor():
             "lng": location["lng"],
             "method": request.method,
             "path": request.path,
+            "request_content": extract_request_content(),
             "user_agent": request.user_agent.string or "unknown",
             "accept_language": request.headers.get("Accept-Language", "unknown"),
             "referer": request.headers.get("Referer", "direct"),
