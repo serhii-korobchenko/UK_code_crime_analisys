@@ -7,4 +7,5 @@ input, button { width: 100%; padding: 10px; border-radius: 8px; border: 1px soli
 button { background: #0f62fe; color: #fff; border: none; cursor: pointer; }
 .grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; }
 #map { height: 480px; border-radius: 12px; }
+#admin-map { height: 420px; border-radius: 12px; }
 @media (max-width: 800px){ .grid { grid-template-columns: 1fr; } }
