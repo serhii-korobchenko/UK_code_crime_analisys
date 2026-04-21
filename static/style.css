@@ -6,5 +6,34 @@ main { max-width: 1100px; margin: 0 auto; padding: 20px; }
 input, button { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #ccc; }
 button { background: #0f62fe; color: #fff; border: none; cursor: pointer; }
 .grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; }
+.hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+.support-banner {
+  flex: 0 0 200px;
+  width: 200px;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0,0,0,.12);
+  opacity: 0.95;
+}
+.support-banner img {
+  width: 100%;
+  display: block;
+}
 #map { height: 480px; border-radius: 12px; }
-@media (max-width: 800px){ .grid { grid-template-columns: 1fr; } }
+#admin-map { height: 420px; border-radius: 12px; }
+@media (max-width: 800px){
+  .grid { grid-template-columns: 1fr; }
+  .hero {
+    flex-direction: column;
+  }
+  .support-banner {
+    width: min(240px, 100%);
+    flex-basis: auto;
+    align-self: flex-end;
+  }
+}
