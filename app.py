@@ -264,8 +264,8 @@ def analyze():
                 crimes.extend(fetch_crimes(lat, lon, month))
         else:
             crimes = fetch_crimes(lat, lon)
-    except Exception:
-        return jsonify({"error": "Failed to fetch data from data.police.uk."}), 502
+    except Exception as exc:
+        return jsonify({"error": f"Failed to fetch data from data.police.uk. Reason: {exc}"}), 502
 
     lat_min, lat_max, lon_min, lon_max = calculate_bbox(lat, lon, radius)
 
