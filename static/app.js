@@ -62,6 +62,13 @@ function updateCategoryFilterOptions(points) {
   categoryFilterSelect.value = selectedMapCategory;
 }
 
+function markerColorByFrequency(freq, maxFreq) {
+  if (maxFreq <= 1) return '#1f77b4';
+  const ratio = (freq - 1) / (maxFreq - 1);
+  const hue = 120 - (120 * ratio); // 120=green, 0=red
+  return `hsl(${hue}, 85%, 45%)`;
+}
+
 function renderCharts(data) {
   const categoryLabels = Object.keys(data.all_categories);
   const categoryValues = Object.values(data.all_categories);
