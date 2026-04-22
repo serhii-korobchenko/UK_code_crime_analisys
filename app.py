@@ -2,8 +2,10 @@ import math
 import os
 import ipaddress
 import json
+import time
 from collections import Counter, deque
 from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 
 import requests
 from flask import Flask, jsonify, render_template, request
@@ -12,6 +14,10 @@ app = Flask(__name__)
 
 POSTCODES_API = "https://api.postcodes.io/postcodes/{postcode}"
 POLICE_API = "https://data.police.uk/api/crimes-street/all-crime"
+REQUEST_DELAY_SECONDS = float(os.environ.get("POLICE_API_REQUEST_DELAY_SECONDS", "0.07"))
+MAX_RETRIES_429 = int(os.environ.get("POLICE_API_MAX_RETRIES_429", "5"))
+BACKOFF_BASE_SECONDS = float(os.environ.get("POLICE_API_BACKOFF_BASE_SECONDS", "0.5"))
+BACKOFF_MAX_SECONDS = float(os.environ.get("POLICE_API_BACKOFF_MAX_SECONDS", "8"))
 ADMIN_PANEL_KEY = os.environ.get("ADMIN_PANEL_KEY", "change-me")
 VISITOR_LOG_LIMIT = 1000
 visitor_log = deque(maxlen=VISITOR_LOG_LIMIT)
@@ -59,6 +65,49 @@ def fetch_crimes(lat: float, lon: float, date: str | None = None):
     response = requests.get(POLICE_API, params=params, timeout=30)
     response.raise_for_status()
     return response.json()
+
+
+def parse_retry_after(header_value: str | None) -> float | None:
+    if not header_value:
+        return None
+
+    stripped = header_value.strip()
+    try:
+        return max(0.0, float(stripped))
+    except ValueError:
+        pass
+
+    try:
+        retry_dt = parsedate_to_datetime(stripped)
+        if retry_dt.tzinfo is None:
+            retry_dt = retry_dt.replace(tzinfo=timezone.utc)
+        now_utc = datetime.now(timezone.utc)
+        return max(0.0, (retry_dt - now_utc).total_seconds())
+    except Exception:
+        return None
+
+
+def fetch_crimes_with_retry(lat: float, lon: float, date: str | None = None):
+    attempt = 0
+    while True:
+        try:
+            return fetch_crimes(lat, lon, date)
+        except requests.HTTPError as exc:
+            status_code = exc.response.status_code if exc.response is not None else None
+            if status_code != 429 or attempt >= MAX_RETRIES_429:
+                raise
+
+            retry_after = parse_retry_after(exc.response.headers.get("Retry-After") if exc.response else None)
+            if retry_after is None:
+                retry_after = min(BACKOFF_MAX_SECONDS, BACKOFF_BASE_SECONDS * (2 ** attempt))
+            time.sleep(retry_after)
+            attempt += 1
+        except requests.RequestException:
+            if attempt >= MAX_RETRIES_429:
+                raise
+            backoff = min(BACKOFF_MAX_SECONDS, BACKOFF_BASE_SECONDS * (2 ** attempt))
+            time.sleep(backoff)
+            attempt += 1
 
 
 def get_client_ip() -> str:
@@ -260,10 +309,12 @@ def analyze():
     try:
         if requested_months:
             crimes = []
-            for month in requested_months:
-                crimes.extend(fetch_crimes(lat, lon, month))
+            for idx, month in enumerate(requested_months):
+                crimes.extend(fetch_crimes_with_retry(lat, lon, month))
+                if REQUEST_DELAY_SECONDS > 0 and idx < len(requested_months) - 1:
+                    time.sleep(REQUEST_DELAY_SECONDS)
         else:
-            crimes = fetch_crimes(lat, lon)
+            crimes = fetch_crimes_with_retry(lat, lon)
     except Exception as exc:
         return jsonify({"error": f"Failed to fetch data from data.police.uk. Reason: {exc}"}), 502
 
