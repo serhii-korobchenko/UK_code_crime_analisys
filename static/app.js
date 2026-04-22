@@ -13,6 +13,54 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 }).addTo(map);
 
 let layerGroup = L.layerGroup().addTo(map);
+let currentMapData = null;
+let selectedMapCategory = 'all';
+let categoryFilterSelect = null;
+
+function markerColorByFrequency(freq, maxFreq) {
+  if (maxFreq <= 1) return '#1f77b4';
+  const ratio = (freq - 1) / (maxFreq - 1);
+  const hue = 120 - (120 * ratio); // 120=green, 0=red
+  return `hsl(${hue}, 85%, 45%)`;
+}
+
+function initMapCategoryControl() {
+  const CategoryControl = L.Control.extend({
+    options: { position: 'topright' },
+    onAdd() {
+      const container = L.DomUtil.create('div', 'map-category-control');
+      container.innerHTML = `
+        <label for="map-category-filter"><strong>Category</strong></label>
+        <select id="map-category-filter">
+          <option value="all">All categories</option>
+        </select>
+      `;
+      L.DomEvent.disableClickPropagation(container);
+      L.DomEvent.disableScrollPropagation(container);
+      return container;
+    },
+  });
+
+  map.addControl(new CategoryControl());
+  categoryFilterSelect = document.getElementById('map-category-filter');
+  categoryFilterSelect.addEventListener('change', () => {
+    selectedMapCategory = categoryFilterSelect.value;
+    if (currentMapData) renderMap(currentMapData, { preserveFilter: true });
+  });
+}
+
+function updateCategoryFilterOptions(points) {
+  if (!categoryFilterSelect) return;
+
+  const categories = [...new Set(points.map((point) => point.category).filter(Boolean))].sort();
+  const previousValue = selectedMapCategory;
+  categoryFilterSelect.innerHTML = `<option value="all">All categories</option>${
+    categories.map((category) => `<option value="${category}">${category}</option>`).join('')
+  }`;
+
+  selectedMapCategory = categories.includes(previousValue) || previousValue === 'all' ? previousValue : 'all';
+  categoryFilterSelect.value = selectedMapCategory;
+}
 
 function markerColorByFrequency(freq, maxFreq) {
   if (maxFreq <= 1) return '#1f77b4';
@@ -47,22 +95,30 @@ function renderCharts(data) {
   });
 }
 
-function renderMap(data) {
+function renderMap(data, options = {}) {
   layerGroup.clearLayers();
+  currentMapData = data;
+
+  if (!options.preserveFilter) selectedMapCategory = 'all';
+  updateCategoryFilterOptions(data.points);
 
   const center = [data.center.lat, data.center.lng];
   L.circle(center, { radius: data.radius, color: 'red', fillOpacity: 0.05 }).addTo(layerGroup);
   L.marker(center).addTo(layerGroup).bindPopup(`Center: ${data.postcode}`);
 
+  const visiblePoints = data.points.filter(
+    (point) => selectedMapCategory === 'all' || point.category === selectedMapCategory
+  );
+
   const frequencyByPoint = new Map();
-  data.points.forEach((point) => {
+  visiblePoints.forEach((point) => {
     const key = `${point.lat.toFixed(5)},${point.lng.toFixed(5)}`;
     frequencyByPoint.set(key, (frequencyByPoint.get(key) || 0) + 1);
   });
 
   const maxFreq = Math.max(...frequencyByPoint.values(), 1);
 
-  data.points.forEach((point) => {
+  visiblePoints.forEach((point) => {
     const key = `${point.lat.toFixed(5)},${point.lng.toFixed(5)}`;
     const frequency = frequencyByPoint.get(key) || 1;
     const pointColor = markerColorByFrequency(frequency, maxFreq);
@@ -76,6 +132,8 @@ function renderMap(data) {
 
   map.fitBounds(L.circle(center, { radius: data.radius }).getBounds());
 }
+
+initMapCategoryControl();
 
 form.addEventListener('submit', async (e) => {
   e.preventDefault();

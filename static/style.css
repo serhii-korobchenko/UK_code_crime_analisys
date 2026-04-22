@@ -26,6 +26,23 @@ button { background: #0f62fe; color: #fff; border: none; cursor: pointer; }
 }
 #map { height: 480px; border-radius: 12px; }
 #admin-map { height: 420px; border-radius: 12px; }
+.map-category-control {
+  background: rgba(255,255,255,0.95);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.15);
+  padding: 8px;
+}
+.map-category-control label {
+  display: block;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+.map-category-control select {
+  min-width: 170px;
+  padding: 6px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+}
 @media (max-width: 800px){
   .grid { grid-template-columns: 1fr; }
   .hero {
