@@ -13,6 +13,54 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 }).addTo(map);
 
 let layerGroup = L.layerGroup().addTo(map);
+let currentMapData = null;
+let selectedMapCategory = 'all';
+let categoryFilterSelect = null;
+
+function markerColorByFrequency(freq, maxFreq) {
+  if (maxFreq <= 1) return '#1f77b4';
+  const ratio = (freq - 1) / (maxFreq - 1);
+  const hue = 120 - (120 * ratio); // 120=green, 0=red
+  return `hsl(${hue}, 85%, 45%)`;
+}
+
+function initMapCategoryControl() {
+  const CategoryControl = L.Control.extend({
+    options: { position: 'topright' },
+    onAdd() {
+      const container = L.DomUtil.create('div', 'map-category-control');
+      container.innerHTML = `
+        <label for="map-category-filter"><strong>Category</strong></label>
+        <select id="map-category-filter">
+          <option value="all">All categories</option>
+        </select>
+      `;
+      L.DomEvent.disableClickPropagation(container);
+      L.DomEvent.disableScrollPropagation(container);
+      return container;
+    },
+  });
+
+  map.addControl(new CategoryControl());
+  categoryFilterSelect = document.getElementById('map-category-filter');
+  categoryFilterSelect.addEventListener('change', () => {
+    selectedMapCategory = categoryFilterSelect.value;
+    if (currentMapData) renderMap(currentMapData, { preserveFilter: true });
+  });
+}
+
+function updateCategoryFilterOptions(points) {
+  if (!categoryFilterSelect) return;
+
+  const categories = [...new Set(points.map((point) => point.category).filter(Boolean))].sort();
+  const previousValue = selectedMapCategory;
+  categoryFilterSelect.innerHTML = `<option value="all">All categories</option>${
+    categories.map((category) => `<option value="${category}">${category}</option>`).join('')
+  }`;
+
+  selectedMapCategory = categories.includes(previousValue) || previousValue === 'all' ? previousValue : 'all';
+  categoryFilterSelect.value = selectedMapCategory;
+}
 
 function renderCharts(data) {
   const categoryLabels = Object.keys(data.all_categories);
@@ -40,32 +88,58 @@ function renderCharts(data) {
   });
 }
 
-function renderMap(data) {
+function renderMap(data, options = {}) {
   layerGroup.clearLayers();
+  currentMapData = data;
+
+  if (!options.preserveFilter) selectedMapCategory = 'all';
+  updateCategoryFilterOptions(data.points);
 
   const center = [data.center.lat, data.center.lng];
   L.circle(center, { radius: data.radius, color: 'red', fillOpacity: 0.05 }).addTo(layerGroup);
   L.marker(center).addTo(layerGroup).bindPopup(`Center: ${data.postcode}`);
 
-  data.points.forEach((point) => {
-    L.circleMarker([point.lat, point.lng], { radius: 5, color: '#1f77b4' })
+  const visiblePoints = data.points.filter(
+    (point) => selectedMapCategory === 'all' || point.category === selectedMapCategory
+  );
+
+  const frequencyByPoint = new Map();
+  visiblePoints.forEach((point) => {
+    const key = `${point.lat.toFixed(5)},${point.lng.toFixed(5)}`;
+    frequencyByPoint.set(key, (frequencyByPoint.get(key) || 0) + 1);
+  });
+
+  const maxFreq = Math.max(...frequencyByPoint.values(), 1);
+
+  visiblePoints.forEach((point) => {
+    const key = `${point.lat.toFixed(5)},${point.lng.toFixed(5)}`;
+    const frequency = frequencyByPoint.get(key) || 1;
+    const pointColor = markerColorByFrequency(frequency, maxFreq);
+
+    L.circleMarker([point.lat, point.lng], { radius: 5, color: pointColor, fillColor: pointColor, fillOpacity: 0.7 })
       .addTo(layerGroup)
-      .bindPopup(`<b>${point.category}</b><br>${point.street}<br>${point.month}<br>${point.outcome}`);
+      .bindPopup(
+        `<b>${point.category}</b><br>${point.street}<br>${point.month}<br>${point.outcome}<br>Frequency at this point: ${frequency}`
+      );
   });
 
   map.fitBounds(L.circle(center, { radius: data.radius }).getBounds());
 }
 
+initMapCategoryControl();
+
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
-  statusEl.textContent = 'Завантаження...';
+  statusEl.textContent = 'Loading...';
 
   try {
-    const month = document.getElementById('month').value;
+    const startMonth = document.getElementById('start-month').value;
+    const endMonth = document.getElementById('end-month').value;
     const payload = {
       postcode: document.getElementById('postcode').value,
       radius: Number(document.getElementById('radius').value),
-      month: month || undefined,
+      start_month: startMonth || undefined,
+      end_month: endMonth || undefined,
     };
 
     const response = await fetch('/api/analyze', {
@@ -75,7 +149,7 @@ form.addEventListener('submit', async (e) => {
     });
 
     const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Помилка запиту');
+    if (!response.ok) throw new Error(data.error || 'Request failed');
 
     outPostcode.textContent = data.postcode;
     outTotal.textContent = data.total_crimes;
@@ -84,7 +158,10 @@ form.addEventListener('submit', async (e) => {
 
     renderCharts(data);
     renderMap(data);
-    statusEl.textContent = `Готово. Знайдено ${data.total_crimes} подій.`;
+    const period = data.period?.start_month && data.period?.end_month
+      ? ` for ${data.period.start_month} — ${data.period.end_month}`
+      : '';
+    statusEl.textContent = `Done. Found ${data.total_crimes} incidents${period}.`;
   } catch (error) {
     statusEl.textContent = error.message;
   }
