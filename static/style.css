@@ -43,6 +43,17 @@ button { background: #0f62fe; color: #fff; border: none; cursor: pointer; }
   border-radius: 6px;
   border: 1px solid #ccc;
 }
+#clear-selected-points {
+  width: auto;
+  margin-bottom: 10px;
+}
+#selected-points-list {
+  margin: 0;
+  padding-left: 18px;
+}
+#selected-points-list li {
+  margin-bottom: 8px;
+}
 @media (max-width: 800px){
   .grid { grid-template-columns: 1fr; }
   .hero {
