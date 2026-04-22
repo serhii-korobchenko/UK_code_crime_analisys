@@ -33,8 +33,18 @@ python app.py
 {
   "postcode": "SW1A 1AA",
   "radius": 300,
-  "month": "2024-01"
+  "start_month": "2024-01",
+  "end_month": "2024-03"
 }
 ```
 
-`month` опціональний.
+`start_month` і `end_month` — опціональні, але мають передаватися парою. Якщо не вказані, API повертає останні доступні дані.
+
+Під капотом API робить запит до `data.police.uk` для кожного місяця в діапазоні.
+
+## Police API rate-limit handling
+- A small delay between multi-month requests is enabled by default: `POLICE_API_REQUEST_DELAY_SECONDS=0.07` (adjustable via env variable).
+- For `429 Too Many Requests`, the app:
+  - respects `Retry-After` response header when present;
+  - otherwise uses exponential backoff (`POLICE_API_BACKOFF_BASE_SECONDS`, `POLICE_API_BACKOFF_MAX_SECONDS`);
+  - retries up to `POLICE_API_MAX_RETRIES_429`.
